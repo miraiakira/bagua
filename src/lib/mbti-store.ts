@@ -1,23 +1,15 @@
-import { Pool } from "pg";
 import {
   AssessmentHistoryItem,
   AssessResponse,
   MbtiQuestion,
   defaultQuestions,
 } from "@/lib/mbti-core";
-
-const databaseURL =
-  process.env.DATABASE_URL ??
-  "postgres://postgres:postgres@localhost:5432/bagua?sslmode=disable";
-
-const pool = new Pool({
-  connectionString: databaseURL,
-});
+import { dbPool } from "@/lib/db";
 
 let schemaReadyPromise: Promise<void> | null = null;
 
 const ensureSchema = async () => {
-  await pool.query(`
+  await dbPool.query(`
 CREATE TABLE IF NOT EXISTS question_bank (
   id TEXT PRIMARY KEY,
   sort_order INT NOT NULL,
@@ -45,7 +37,7 @@ CREATE TABLE IF NOT EXISTS assessment_result (
 
 const seedQuestions = async (source: MbtiQuestion[]) => {
   for (const [index, q] of source.entries()) {
-    await pool.query(
+    await dbPool.query(
       `INSERT INTO question_bank (id, sort_order, dimension, prompt, option_a, option_b)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET
@@ -72,7 +64,8 @@ const ensureReady = async () => {
 
 export const listQuestions = async (): Promise<MbtiQuestion[]> => {
   await ensureReady();
-  const result = await pool.query<{
+  await seedQuestions(defaultQuestions);
+  const result = await dbPool.query<{
     id: string;
     dimension: string;
     prompt: string;
@@ -101,7 +94,7 @@ export const saveAssessment = async (
   assessment: AssessResponse,
 ) => {
   await ensureReady();
-  await pool.query(
+  await dbPool.query(
     `INSERT INTO assessment_result (user_id, mbti, subtype, type64, answers, scores, advice, hexagram)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb)`,
     [
@@ -121,13 +114,13 @@ export const listAssessmentHistory = async (
   userId: string,
 ): Promise<AssessmentHistoryItem[]> => {
   await ensureReady();
-  const result = await pool.query<{
+  const result = await dbPool.query<{
     id: string;
     mbti: string;
     subtype: string;
     type64: string;
     scores: Record<string, number>;
-    advice: Record<string, string>;
+    advice: AssessmentHistoryItem["advice"];
     hexagram: AssessmentHistoryItem["hexagram"];
     created_at: Date;
   }>(

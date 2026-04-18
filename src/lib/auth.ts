@@ -2,15 +2,12 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { PostgresDialect } from "kysely";
-import { Pool } from "pg";
 import { Resend } from "resend";
+import { dbPool } from "@/lib/db";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3221";
 const secret =
   process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-me-dev-secret-change-me";
-const databaseURL =
-  process.env.DATABASE_URL ??
-  "postgres://postgres:postgres@localhost:5432/bagua?sslmode=disable";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -154,7 +151,7 @@ type AuthEmailCallbackParams = {
 
 export const auth = betterAuth({
   database: new PostgresDialect({
-    pool: new Pool({ connectionString: databaseURL }),
+    pool: dbPool,
   }),
   baseURL,
   secret,

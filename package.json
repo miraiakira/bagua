@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start -p 3221",
     "lint": "eslint",
-    "auth:migrate": "better-auth migrate --config src/lib/auth.ts -y"
+    "auth:migrate": "better-auth migrate --config src/lib/auth.ts -y",
+    "advice:backfill": "npx --yes tsx scripts/backfill-assessment-advice.ts"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.1.2",
     "@aws-sdk/client-s3": "^3.1029.0",
+    "@vercel/analytics": "^2.0.1",
     "antd": "6.3.4",
     "antd-img-crop": "^4.30.0",
     "better-auth": "^1.5.6",

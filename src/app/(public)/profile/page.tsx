@@ -24,6 +24,12 @@ import {
 import type { UploadProps } from "antd";
 import ImgCrop from "antd-img-crop";
 import { authClient } from "@/lib/auth-client";
+import {
+  buildAdvice,
+  buildDimensionScoreExplanations,
+  buildPersonalityAnalysis,
+  type Hexagram,
+} from "@/lib/mbti-core";
 
 type HistoryItem = {
   id: number;
@@ -37,25 +43,7 @@ type HistoryItem = {
     investment?: string;
     relationship?: string;
   };
-  hexagram: {
-    bits?: string;
-    kingWen: number;
-    name: string;
-    symbol: string;
-    title: string;
-    upper: {
-      bits?: string;
-      name: string;
-      symbol: string;
-      xiang: string;
-    };
-    lower: {
-      bits?: string;
-      name: string;
-      symbol: string;
-      xiang: string;
-    };
-  };
+  hexagram: Hexagram;
 };
 
 type NFTTrait = {
@@ -505,12 +493,15 @@ export default function ProfilePage() {
     () =>
       history.map((item) => ({
         ...item,
+        advice: buildAdvice(item.mbti, item.subtype, item.hexagram, item.scores),
         createdAtText: Number.isNaN(new Date(item.createdAt).getTime())
           ? item.createdAt
           : new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false }),
         mbtiDisplayName: getMbtiDisplayName(item.mbti, item.subtype),
         hexagramSummary: getHexagramSummary(item),
         personalitySummary: getPersonalitySummary(item),
+        analysis: buildPersonalityAnalysis(item.mbti, item.subtype, item.scores, item.hexagram),
+        scoreExplanations: buildDimensionScoreExplanations(item.scores),
         scoreItems: Object.entries(item.scores || {}).map(([dimension, score]) => ({
           dimension,
           score,
@@ -867,16 +858,61 @@ export default function ProfilePage() {
                         </Tag>
                       ))}
                     </Space>
+                    <Row gutter={[12, 12]}>
+                      {item.scoreExplanations.map((scoreItem) => (
+                        <Col xs={24} md={12} key={scoreItem.code}>
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <Space orientation="vertical" size={4} className="w-full">
+                              <Space size={8} wrap>
+                                <Tag color="geekblue">{scoreItem.code}</Tag>
+                                <Typography.Text strong>{scoreItem.name}</Typography.Text>
+                                <Tag color={scoreItem.polarity === "balanced"
+                                  ? "default"
+                                  : scoreItem.polarity === "A"
+                                    ? "green"
+                                    : "volcano"}
+                                >
+                                  {scoreItem.score > 0 ? "+" : ""}
+                                  {scoreItem.score}
+                                </Tag>
+                              </Space>
+                              <Typography.Text>
+                                {scoreItem.intensity} · {scoreItem.tendency}
+                              </Typography.Text>
+                              <Typography.Text type="secondary">
+                                {scoreItem.summary}
+                              </Typography.Text>
+                            </Space>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
+                    <Space orientation="vertical" size={4} className="w-full">
+                      <Typography.Text strong>人格分析</Typography.Text>
+                      <Typography.Text>
+                        基调：{item.analysis.baseline}
+                      </Typography.Text>
+                      <Typography.Text>
+                        优势：{item.analysis.strengths}
+                      </Typography.Text>
+                      <Typography.Text>
+                        提醒：{item.analysis.blindSpot}
+                      </Typography.Text>
+                      <Typography.Text>
+                        节奏：{item.analysis.rhythm}
+                      </Typography.Text>
+                    </Space>
+                    <Divider className="!my-2" />
                     <Space orientation="vertical" size={4} className="w-full">
                       <Typography.Text strong>策略建议</Typography.Text>
                       <Typography.Text>
-                        产品：{item.advice.product || "暂无"}
+                        行动建议：{item.advice.product || "暂无"}
                       </Typography.Text>
                       <Typography.Text>
-                        投资：{item.advice.investment || "暂无"}
+                        决策建议：{item.advice.investment || "暂无"}
                       </Typography.Text>
                       <Typography.Text>
-                        人际：{item.advice.relationship || "暂无"}
+                        人际建议：{item.advice.relationship || "暂无"}
                       </Typography.Text>
                     </Space>
                     <Divider className="!my-2" />
@@ -884,26 +920,27 @@ export default function ProfilePage() {
                       <Typography.Text strong>
                         NFT 预览（稀有度 {item.nft.rarityScore}）
                       </Typography.Text>
-                      {nftPngById[item.id] ? (
-                        <AntImage
-                          src={nftPngById[item.id]}
-                          alt={`${item.hexagram.name} NFT 预览`}
-                          width={320}
-                          height={320}
-                          className="rounded-md border border-gray-200"
-                          preview={{
-                            mask: "点击预览",
-                            src: nftPngById[item.id],
-                          }}
-                        />
-                      ) : (
-                        <div className="flex h-[320px] w-[320px] items-center justify-center rounded-md border border-gray-200 bg-gray-50">
-                          <Space orientation="vertical" align="center" size={8}>
-                            <Spin size="small" />
-                            <Typography.Text type="secondary">正在生成 PNG</Typography.Text>
-                          </Space>
-                        </div>
-                      )}
+                      <div className="mx-auto w-full max-w-[320px]">
+                        {nftPngById[item.id] ? (
+                          <AntImage
+                            src={nftPngById[item.id]}
+                            alt={`${item.hexagram.name} NFT 预览`}
+                            width="100%"
+                            className="block aspect-square w-full overflow-hidden rounded-md border border-gray-200"
+                            preview={{
+                              mask: "点击预览",
+                              src: nftPngById[item.id],
+                            }}
+                          />
+                        ) : (
+                          <div className="flex aspect-square w-full items-center justify-center rounded-md border border-gray-200 bg-gray-50">
+                            <Space orientation="vertical" align="center" size={8}>
+                              <Spin size="small" />
+                              <Typography.Text type="secondary">正在生成 PNG</Typography.Text>
+                            </Space>
+                          </div>
+                        )}
+                      </div>
                       <Space size={8} wrap>
                         <Button
                           size="small"

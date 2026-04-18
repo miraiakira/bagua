@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -15,6 +15,11 @@ import {
   Typography,
 } from "antd";
 import { authClient } from "@/lib/auth-client";
+import {
+  buildDimensionScoreExplanations,
+  buildPersonalityAnalysis,
+  type Hexagram,
+} from "@/lib/mbti-core";
 
 type Question = {
   id: string;
@@ -29,16 +34,7 @@ type AssessResponse = {
   subtype: string;
   type64: string;
   scores: Record<string, number>;
-  hexagram: {
-    fuxiIndex: number;
-    kingWen: number;
-    symbol: string;
-    name: string;
-    title: string;
-    bits: string;
-    upper: { name: string; symbol: string; xiang: string };
-    lower: { name: string; symbol: string; xiang: string };
-  };
+  hexagram: Hexagram;
   advice: {
     product: string;
     investment: string;
@@ -47,26 +43,42 @@ type AssessResponse = {
   timestamp: string;
 };
 
+type SubmitEvent = Parameters<NonNullable<React.ComponentProps<"form">["onSubmit"]>>[0];
+
 const apiBase = "/api";
 
 export default function Home() {
-  const { data: sessionData } = authClient.useSession();
+  const { data: sessionData, isPending: sessionPending } = authClient.useSession();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, "A" | "B">>({});
   const [result, setResult] = useState<AssessResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sessionHydrated, setSessionHydrated] = useState(false);
   const currentUser = sessionData?.user ?? null;
+  const authResolved = sessionHydrated && !sessionPending;
 
   useEffect(() => {
+    setSessionHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!authResolved) {
+      return;
+    }
+
     if (!currentUser) {
       setQuestions([]);
       setAnswers({});
       setResult(null);
+      setQuestionsLoading(false);
       return;
     }
 
     const loadQuestions = async () => {
+      setQuestionsLoading(true);
+      setError("");
       try {
         const res = await fetch(`${apiBase}/mbti/questions`);
         if (!res.ok) {
@@ -76,10 +88,12 @@ export default function Home() {
         setQuestions(data.questions ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "加载失败");
+      } finally {
+        setQuestionsLoading(false);
       }
     };
     void loadQuestions();
-  }, [currentUser]);
+  }, [authResolved, currentUser]);
 
   const answeredCount = useMemo(
     () => Object.keys(answers).length,
@@ -93,10 +107,20 @@ export default function Home() {
 
   const canSubmit = totalQuestions > 0 && answeredCount === totalQuestions;
   const displayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "用户";
+  const resultAnalysis = useMemo(
+    () => (result
+      ? buildPersonalityAnalysis(result.mbti, result.subtype, result.scores, result.hexagram)
+      : null),
+    [result],
+  );
+  const scoreExplanations = useMemo(
+    () => (result ? buildDimensionScoreExplanations(result.scores) : []),
+    [result],
+  );
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (!canSubmit) {
+    if (!canSubmit || loading) {
       return;
     }
     setLoading(true);
@@ -121,7 +145,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 flex flex-col gap-4">
-      {!currentUser && (
+      {authResolved && !currentUser && (
         <Alert
           className="mb-4"
           type="info"
@@ -135,13 +159,13 @@ export default function Home() {
           <Space orientation="vertical" size={12} className="w-full">
             <Space size={8} wrap>
               <Tag color="purple">认知问卷</Tag>
-              {currentUser && <Tag color="green">已登录：{displayName}</Tag>}
+              {authResolved && currentUser && <Tag color="green">已登录：{displayName}</Tag>}
             </Space>
             <Typography.Title level={2} className="!mb-0">
               MBTI × 卦象 决策测评
             </Typography.Title>
             <Typography.Paragraph className="!mb-0">
-              完成 18 题后，系统会输出你的 MBTI、64 子型与对应卦象，并给出产品、投资、人际三类策略建议。
+              完成 18 题后，系统会输出你的 MBTI、64 子型与对应卦象，并给出行动、决策、人际三类策略建议。
             </Typography.Paragraph>
             <Row gutter={[12, 12]}>
               <Col xs={24} md={8}>
@@ -206,7 +230,7 @@ export default function Home() {
                   type="primary"
                   htmlType="submit"
                   loading={loading}
-                  disabled={!canSubmit || !currentUser}
+                  disabled={!canSubmit || !currentUser || questionsLoading}
                   block
                 >
                   生成 MBTI 与对应卦象
@@ -216,6 +240,9 @@ export default function Home() {
           </Space>
         </form>
 
+        {authResolved && currentUser && questionsLoading && (
+          <Alert title="题目加载中..." type="info" showIcon />
+        )}
         {error && <Alert title={error} type="error" showIcon />}
 
         {result && (
@@ -264,18 +291,70 @@ export default function Home() {
                   </Card>
                 </Col>
               </Row>
+              <Card size="small" title="六维分数解释">
+                <Row gutter={[12, 12]}>
+                  {scoreExplanations.map((item) => (
+                    <Col xs={24} md={12} xl={8} key={item.code}>
+                      <Card size="small">
+                        <Space orientation="vertical" size={6} className="w-full">
+                          <Space size={8} wrap>
+                            <Tag color="geekblue">{item.code}</Tag>
+                            <Typography.Text strong>{item.name}</Typography.Text>
+                            <Tag color={item.polarity === "balanced"
+                              ? "default"
+                              : item.polarity === "A"
+                                ? "green"
+                                : "volcano"}
+                            >
+                              {item.score > 0 ? "+" : ""}
+                              {item.score}
+                            </Tag>
+                          </Space>
+                          <Typography.Text>
+                            {item.intensity} · {item.tendency}
+                          </Typography.Text>
+                          <Typography.Text type="secondary">
+                            {item.summary}
+                          </Typography.Text>
+                        </Space>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              </Card>
               <Card size="small" title="策略建议">
                 <Space orientation="vertical" size={8}>
+                  {resultAnalysis && (
+                    <>
+                      <Typography.Paragraph className="!mb-0">
+                        <Typography.Text strong>人格基调：</Typography.Text>
+                        {resultAnalysis.baseline}
+                      </Typography.Paragraph>
+                      <Typography.Paragraph className="!mb-0">
+                        <Typography.Text strong>天然优势：</Typography.Text>
+                        {resultAnalysis.strengths}
+                      </Typography.Paragraph>
+                      <Typography.Paragraph className="!mb-0">
+                        <Typography.Text strong>决策提醒：</Typography.Text>
+                        {resultAnalysis.blindSpot}
+                      </Typography.Paragraph>
+                      <Typography.Paragraph className="!mb-0">
+                        <Typography.Text strong>卦象节奏：</Typography.Text>
+                        {resultAnalysis.rhythm}
+                      </Typography.Paragraph>
+                      <Divider className="!my-1" />
+                    </>
+                  )}
                   <Typography.Paragraph className="!mb-0">
-                    <Typography.Text strong>产品决策：</Typography.Text>
+                    <Typography.Text strong>行动建议：</Typography.Text>
                     {result.advice.product}
                   </Typography.Paragraph>
                   <Typography.Paragraph className="!mb-0">
-                    <Typography.Text strong>投资判断：</Typography.Text>
+                    <Typography.Text strong>决策建议：</Typography.Text>
                     {result.advice.investment}
                   </Typography.Paragraph>
                   <Typography.Paragraph className="!mb-0">
-                    <Typography.Text strong>人际策略：</Typography.Text>
+                    <Typography.Text strong>人际建议：</Typography.Text>
                     {result.advice.relationship}
                   </Typography.Paragraph>
                 </Space>

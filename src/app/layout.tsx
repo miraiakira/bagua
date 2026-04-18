@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "antd/dist/reset.css";
 import "./globals.css";
 import { Providers } from "./providers";
-import { AppHeader } from "./app-header";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,10 +28,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="bg-gray-50 text-gray-900">
-        <Providers>
-          <AppHeader />
-          <main>{children}</main>
-        </Providers>
+        <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
