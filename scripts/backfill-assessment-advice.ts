@@ -1,5 +1,6 @@
 import process from "node:process";
-import { loadEnvConfig } from "@next/env";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { AdviceBundle, Hexagram } from "../src/lib/mbti-core";
 
 type AssessmentAdviceRow = {
@@ -19,13 +20,55 @@ type PendingUpdate = {
 
 const shouldApply = process.argv.includes("--apply");
 
+const loadLocalEnv = () => {
+  const envFiles = [".env.local", ".env"];
+
+  for (const fileName of envFiles) {
+    const filePath = resolve(process.cwd(), fileName);
+    if (!existsSync(filePath)) {
+      continue;
+    }
+
+    const content = readFileSync(filePath, "utf8");
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) {
+        continue;
+      }
+
+      const normalized = line.startsWith("export ")
+        ? line.slice(7).trim()
+        : line;
+      const separatorIndex = normalized.indexOf("=");
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      const key = normalized.slice(0, separatorIndex).trim();
+      if (!key || process.env[key] !== undefined) {
+        continue;
+      }
+
+      let value = normalized.slice(separatorIndex + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      process.env[key] = value;
+    }
+  }
+};
+
 const isAdviceEqual = (left: AdviceBundle | null, right: AdviceBundle) =>
   (left?.product || "") === right.product &&
   (left?.investment || "") === right.investment &&
   (left?.relationship || "") === right.relationship;
 
 const main = async () => {
-  loadEnvConfig(process.cwd());
+  loadLocalEnv();
 
   const [{ dbPool }, { buildAdvice }] = await Promise.all([
     import("../src/lib/db"),
@@ -116,7 +159,7 @@ void main().catch(async (error) => {
   console.error("[assessment_result.advice] backfill failed");
   console.error(error);
   try {
-    loadEnvConfig(process.cwd());
+    loadLocalEnv();
     const { dbPool } = await import("../src/lib/db");
     await dbPool.end();
   } catch {}
