@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Avatar, Button, Dropdown, Space } from "antd";
@@ -42,6 +43,7 @@ export function AppHeader() {
   };
 
   const isActive = (href: string) => pathname === href;
+  const isSectionActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const menuItems = useMemo(
     () => [
       { key: "profile", label: "个人中心" },
@@ -84,21 +86,42 @@ export function AppHeader() {
   }, [currentUser]);
 
   return (
-    <header className="border-b border-gray-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 shadow-sm backdrop-blur">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-        <Space size={16} align="center">
-          <Link href="/" className="text-base font-semibold text-gray-900">
-            Bagua
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center gap-2 text-gray-900">
+            <Image
+              src="/bagua.png"
+              alt="Bagua"
+              width={32}
+              height={32}
+              priority
+              className="h-8 w-8 object-contain"
+            />
+            <span className="flex flex-col leading-tight">
+              <span className="font-semibold">Bagua</span>
+              <span className="hidden text-[10px] text-gray-500 sm:inline">人格决策测评</span>
+            </span>
           </Link>
-          <Space size={12}>
+          <nav className="hidden items-center gap-5 text-sm sm:flex" aria-label="主导航">
             <Link
               href="/"
               className={isActive("/") ? "text-indigo-600 font-medium" : "text-gray-600"}
             >
-              首页
+              测评
             </Link>
-          </Space>
-        </Space>
+            {currentUser && (
+              <Link
+                href="/profile"
+                className={isSectionActive("/profile")
+                  ? "text-indigo-600 font-medium"
+                  : "text-gray-600"}
+              >
+                我的结果
+              </Link>
+            )}
+          </nav>
+        </div>
 
         {!authResolved ? (
           <Button size="small" loading>
@@ -129,7 +152,7 @@ export function AppHeader() {
             <Button size="small" className="!h-auto !px-2 !py-1" loading={sessionPending}>
               <Space size={8}>
                 <Avatar size="small" src={avatarSrc}>{avatarSrc ? null : avatarContent}</Avatar>
-                <span>{displayName}</span>
+                <span className="hidden sm:inline">{displayName}</span>
               </Space>
             </Button>
           </Dropdown>

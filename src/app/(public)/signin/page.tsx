@@ -80,8 +80,8 @@ function SignInContent() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
-      <Card title="邮箱登录" className="mx-auto max-w-md">
+    <div className="flex min-h-[calc(100dvh-57px)] w-full items-center justify-center px-4 py-8">
+      <Card title="邮箱登录" className="w-full max-w-md">
         <form onSubmit={onSignIn}>
           <Space orientation="vertical" size={12} className="w-full">
             <Input
@@ -116,8 +116,8 @@ export default function SignInPage() {
   return (
     <Suspense
       fallback={(
-        <div className="mx-auto w-full max-w-5xl px-4 py-8">
-          <Card className="mx-auto max-w-md">
+        <div className="flex min-h-[calc(100dvh-57px)] w-full items-center justify-center px-4 py-8">
+          <Card className="w-full max-w-md">
             <Typography.Text type="secondary">页面加载中...</Typography.Text>
           </Card>
         </div>

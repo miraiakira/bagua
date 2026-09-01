@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Avatar,
   Button,
   Card,
   Col,
@@ -13,6 +14,7 @@ import {
   Statistic,
   Tag,
   Typography,
+  message,
 } from "antd";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -43,6 +45,12 @@ type AssessResponse = {
   timestamp: string;
 };
 
+type PointSummary = {
+  balance: number;
+  todayCheckedIn: boolean;
+  dailyCheckinPoints: number;
+};
+
 type SubmitEvent = Parameters<NonNullable<React.ComponentProps<"form">["onSubmit"]>>[0];
 
 const apiBase = "/api";
@@ -57,14 +65,90 @@ export default function Home() {
   const [error, setError] = useState("");
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [lastSubmittedAnswers, setLastSubmittedAnswers] = useState("");
+  const [points, setPoints] = useState<PointSummary | null>(null);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsError, setPointsError] = useState("");
+  const [checkinLoading, setCheckinLoading] = useState(false);
   const submitLockRef = useRef(false);
   const submissionRef = useRef<{ answers: string; id: string } | null>(null);
+  const [messageApi, messageContextHolder] = message.useMessage();
   const currentUser = sessionData?.user ?? null;
+  const userId = currentUser?.id;
   const authResolved = sessionHydrated && !sessionPending;
 
   useEffect(() => {
     setSessionHydrated(true);
   }, []);
+
+  const fetchPoints = useCallback(async (silent = false) => {
+    if (!userId) {
+      setPoints(null);
+      return;
+    }
+    if (!silent) {
+      setPointsLoading(true);
+    }
+    setPointsError("");
+    try {
+      const response = await fetch("/api/points", { cache: "no-store" });
+      const data = (await response.json()) as PointSummary & { message?: string };
+      if (!response.ok) {
+        throw new Error(data.message || "加载瓜子失败");
+      }
+      setPoints(data);
+    } catch (fetchError) {
+      setPointsError(fetchError instanceof Error ? fetchError.message : "加载瓜子失败");
+    } finally {
+      if (!silent) {
+        setPointsLoading(false);
+      }
+    }
+  }, [userId]);
+
+  const onDailyCheckin = async () => {
+    if (checkinLoading) {
+      return;
+    }
+    setCheckinLoading(true);
+    setPointsError("");
+    try {
+      const response = await fetch("/api/points/checkin", { method: "POST" });
+      const data = (await response.json()) as {
+        awarded?: boolean;
+        points?: number;
+        summary?: PointSummary;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || "签到失败");
+      }
+      if (data.summary) {
+        setPoints(data.summary);
+      } else {
+        await fetchPoints(true);
+      }
+      if (data.awarded) {
+        messageApi.success(`签到成功，获得 ${data.points || 0} 瓜子`);
+      } else {
+        messageApi.info("今天已经签到过了");
+      }
+    } catch (checkinError) {
+      const messageText = checkinError instanceof Error ? checkinError.message : "签到失败";
+      setPointsError(messageText);
+      messageApi.error(messageText);
+    } finally {
+      setCheckinLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authResolved || !userId) {
+      setPoints(null);
+      setPointsError("");
+      return;
+    }
+    void fetchPoints();
+  }, [authResolved, fetchPoints, userId]);
 
   useEffect(() => {
     if (!authResolved) {
@@ -159,6 +243,7 @@ export default function Home() {
       const data = (await res.json()) as AssessResponse;
       setResult(data);
       setLastSubmittedAnswers(serializedAnswers);
+      await fetchPoints(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
@@ -169,6 +254,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 flex flex-col gap-4">
+      {messageContextHolder}
       {authResolved && !currentUser && (
         <Alert
           className="mb-4"
@@ -180,17 +266,66 @@ export default function Home() {
 
       <Space orientation="vertical" size={16} className="w-full">
         <Card>
-          <Space orientation="vertical" size={12} className="w-full">
-            <Space size={8} wrap>
-              <Tag color="purple">认知问卷</Tag>
-              {authResolved && currentUser && <Tag color="green">已登录：{displayName}</Tag>}
-            </Space>
-            <Typography.Title level={2} className="!mb-0">
-              MBTI × 卦象 决策测评
-            </Typography.Title>
-            <Typography.Paragraph className="!mb-0">
-              完成 18 题后，系统会输出你的 MBTI、64 子型与对应卦象，并给出行动、决策、人际三类策略建议。
-            </Typography.Paragraph>
+          <Space orientation="vertical" size={16} className="w-full">
+            <Row gutter={[20, 20]} align="middle">
+              <Col xs={24} md={currentUser ? 14 : 24}>
+                <Space orientation="vertical" size={10} className="w-full">
+                  <Tag color="purple" className="w-fit">认知问卷</Tag>
+                  <Typography.Title level={2} className="!mb-0">
+                    MBTI × 卦象 决策测评
+                  </Typography.Title>
+                  <Typography.Paragraph className="!mb-0">
+                    完成 18 题后，系统会输出你的 MBTI、64 子型与对应卦象，并给出行动、决策、人际三类策略建议。
+                  </Typography.Paragraph>
+                  {currentUser && (
+                    <Space size={10} align="center" className="pt-1">
+                      <Avatar size={40} src={currentUser.image || undefined}>
+                        {currentUser.image ? null : displayName.slice(0, 1).toUpperCase()}
+                      </Avatar>
+                      <Space orientation="vertical" size={0}>
+                        <Typography.Text strong>欢迎回来，{displayName}</Typography.Text>
+                        <Typography.Text type="secondary" className="text-xs">
+                          {currentUser.email}
+                        </Typography.Text>
+                      </Space>
+                    </Space>
+                  )}
+                </Space>
+              </Col>
+              {currentUser && (
+                <Col xs={24} md={10}>
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+                    <Space orientation="vertical" size={12} className="w-full">
+                      <div className="flex items-start justify-between gap-3">
+                        <Statistic
+                          title="我的瓜子"
+                          value={points?.balance ?? 0}
+                          loading={pointsLoading && !points}
+                        />
+                        <Tag color={points?.todayCheckedIn ? "success" : "gold"}>
+                          {points?.todayCheckedIn ? "今日已签到" : "今日未签到"}
+                        </Tag>
+                      </div>
+                      <Button
+                        type="primary"
+                        block
+                        loading={checkinLoading}
+                        disabled={pointsLoading || Boolean(points?.todayCheckedIn)}
+                        onClick={() => void onDailyCheckin()}
+                      >
+                        {points?.todayCheckedIn
+                          ? "今日已领取"
+                          : `签到 +${points?.dailyCheckinPoints ?? 5} 瓜子`}
+                      </Button>
+                    </Space>
+                    {pointsError && (
+                      <Alert className="mt-3" type="error" showIcon title={pointsError} />
+                    )}
+                  </div>
+                </Col>
+              )}
+            </Row>
+            <Divider className="!my-0" />
             <Row gutter={[12, 12]}>
               <Col xs={24} md={8}>
                 <Card size="small">
