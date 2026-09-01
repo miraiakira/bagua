@@ -46,6 +46,22 @@ type HistoryItem = {
   hexagram: Hexagram;
 };
 
+type PointLedgerItem = {
+  id: number;
+  delta: number;
+  reason: string;
+  source: string;
+  referenceId: string;
+  createdAt: string;
+};
+
+type PointSummary = {
+  balance: number;
+  todayCheckedIn: boolean;
+  dailyCheckinPoints: number;
+  recent: PointLedgerItem[];
+};
+
 type NFTTrait = {
   trait_type: string;
   value: string | number;
@@ -485,6 +501,10 @@ export default function ProfilePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [points, setPoints] = useState<PointSummary | null>(null);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsError, setPointsError] = useState("");
+  const [checkinLoading, setCheckinLoading] = useState(false);
   const [nftPngById, setNftPngById] = useState<Record<number, string>>({});
   const [messageApi, messageContextHolder] = message.useMessage();
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -619,6 +639,72 @@ export default function ProfilePage() {
     return true;
   };
 
+  const fetchPoints = useCallback(
+    async (silent = false) => {
+      if (!currentUser) {
+        setPoints(null);
+        return;
+      }
+      if (!silent) {
+        setPointsLoading(true);
+      }
+      setPointsError("");
+      try {
+        const response = await fetch("/api/points", { cache: "no-store" });
+        const data = (await response.json()) as PointSummary & { message?: string };
+        if (!response.ok) {
+          throw new Error(data.message || "加载瓜子失败");
+        }
+        setPoints(data);
+      } catch (error) {
+        setPointsError(error instanceof Error ? error.message : "加载瓜子失败");
+      } finally {
+        if (!silent) {
+          setPointsLoading(false);
+        }
+      }
+    },
+    [currentUser],
+  );
+
+  const onDailyCheckin = async () => {
+    if (checkinLoading) {
+      return;
+    }
+    setCheckinLoading(true);
+    setPointsError("");
+    try {
+      const response = await fetch("/api/points/checkin", {
+        method: "POST",
+      });
+      const data = (await response.json()) as {
+        awarded?: boolean;
+        points?: number;
+        summary?: PointSummary;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || "签到失败");
+      }
+      if (data.summary) {
+        setPoints(data.summary);
+      } else {
+        await fetchPoints(true);
+      }
+      if (data.awarded) {
+        messageApi.success(`签到成功，获得 ${data.points || 0} 瓜子`);
+      } else {
+        messageApi.info("今天已经签到过了");
+      }
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "签到失败";
+      setPointsError(messageText);
+      messageApi.error(messageText);
+    } finally {
+      setCheckinLoading(false);
+    }
+  };
+
   const fetchHistory = useCallback(
     async (silent = false) => {
       if (!currentUser) {
@@ -671,7 +757,8 @@ export default function ProfilePage() {
       }
     }
     void fetchHistory(hasCachedHistory);
-  }, [currentUser, fetchHistory, historyCacheKey]);
+    void fetchPoints(hasCachedHistory);
+  }, [currentUser, fetchHistory, fetchPoints, historyCacheKey]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -679,10 +766,12 @@ export default function ProfilePage() {
     }
     const onFocus = () => {
       void fetchHistory(true);
+      void fetchPoints(true);
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void fetchHistory(true);
+        void fetchPoints(true);
       }
     };
     window.addEventListener("focus", onFocus);
@@ -691,7 +780,7 @@ export default function ProfilePage() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [currentUser, fetchHistory]);
+  }, [currentUser, fetchHistory, fetchPoints]);
 
   if (!currentUser) {
     return (
@@ -796,6 +885,84 @@ export default function ProfilePage() {
               </Button>
             </Space>
           </Space>
+        </Card>
+
+        <Card
+          title="我的瓜子"
+          extra={(
+            <Button size="small" onClick={() => void fetchPoints(false)} loading={pointsLoading}>
+              刷新
+            </Button>
+          )}
+        >
+          {pointsLoading && !points ? (
+            <div className="py-8 text-center">
+              <Spin />
+            </div>
+          ) : pointsError ? (
+            <Alert type="error" showIcon title={pointsError} />
+          ) : (
+            <Space orientation="vertical" size={16} className="w-full">
+              <Row gutter={[12, 12]} align="middle">
+                <Col xs={24} md={8}>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <Typography.Text type="secondary">当前瓜子</Typography.Text>
+                    <Typography.Title level={2} className="!mb-0 !mt-1">
+                      {points?.balance ?? 0}
+                    </Typography.Title>
+                  </div>
+                </Col>
+                <Col xs={24} md={16}>
+                  <Space orientation="vertical" size={8} className="w-full">
+                    <Space size={8} wrap>
+                      <Tag color={points?.todayCheckedIn ? "success" : "gold"}>
+                        {points?.todayCheckedIn ? "今日已签到" : "今日未签到"}
+                      </Tag>
+                      <Tag color="blue">签到 +{points?.dailyCheckinPoints ?? 5} 瓜子</Tag>
+                      <Tag color="purple">测评 +10 瓜子</Tag>
+                    </Space>
+                    <Button
+                      type="primary"
+                      onClick={onDailyCheckin}
+                      loading={checkinLoading}
+                      disabled={Boolean(points?.todayCheckedIn)}
+                    >
+                      {points?.todayCheckedIn ? "今日已领取" : "签到领瓜子"}
+                    </Button>
+                  </Space>
+                </Col>
+              </Row>
+
+              <Divider className="!my-0" />
+
+              <Space orientation="vertical" size={8} className="w-full">
+                <Typography.Text strong>瓜子明细</Typography.Text>
+                {points?.recent?.length ? (
+                  <Space orientation="vertical" size={8} className="w-full">
+                    {points.recent.slice(0, 8).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <Space size={8} wrap>
+                          <Tag color={item.delta >= 0 ? "green" : "volcano"}>
+                            {item.delta >= 0 ? "+" : ""}
+                            {item.delta}
+                          </Tag>
+                          <Typography.Text>{item.reason}</Typography.Text>
+                        </Space>
+                        <Typography.Text type="secondary" className="text-xs">
+                          {new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}
+                        </Typography.Text>
+                      </div>
+                    ))}
+                  </Space>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无瓜子记录" />
+                )}
+              </Space>
+            </Space>
+          )}
         </Card>
 
         <Card

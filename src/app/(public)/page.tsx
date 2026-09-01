@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -56,6 +56,9 @@ export default function Home() {
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [error, setError] = useState("");
   const [sessionHydrated, setSessionHydrated] = useState(false);
+  const [lastSubmittedAnswers, setLastSubmittedAnswers] = useState("");
+  const submitLockRef = useRef(false);
+  const submissionRef = useRef<{ answers: string; id: string } | null>(null);
   const currentUser = sessionData?.user ?? null;
   const authResolved = sessionHydrated && !sessionPending;
 
@@ -72,6 +75,8 @@ export default function Home() {
       setQuestions([]);
       setAnswers({});
       setResult(null);
+      setLastSubmittedAnswers("");
+      submissionRef.current = null;
       setQuestionsLoading(false);
       return;
     }
@@ -105,7 +110,14 @@ export default function Home() {
     ? 0
     : Math.round((answeredCount / totalQuestions) * 100);
 
-  const canSubmit = totalQuestions > 0 && answeredCount === totalQuestions;
+  const serializedAnswers = useMemo(
+    () => JSON.stringify(questions.map((question) => [question.id, answers[question.id]])),
+    [answers, questions],
+  );
+  const isCurrentAnswerSubmitted = serializedAnswers === lastSubmittedAnswers;
+  const canSubmit = totalQuestions > 0
+    && answeredCount === totalQuestions
+    && !isCurrentAnswerSubmitted;
   const displayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "用户";
   const resultAnalysis = useMemo(
     () => (result
@@ -120,25 +132,37 @@ export default function Home() {
 
   const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (!canSubmit || loading) {
+    if (!canSubmit || loading || submitLockRef.current) {
       return;
     }
+    submitLockRef.current = true;
     setLoading(true);
     setError("");
     try {
+      if (submissionRef.current?.answers !== serializedAnswers) {
+        submissionRef.current = {
+          answers: serializedAnswers,
+          id: crypto.randomUUID(),
+        };
+      }
       const res = await fetch(`${apiBase}/mbti/assess`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({
+          answers,
+          submissionId: submissionRef.current.id,
+        }),
       });
       if (!res.ok) {
         throw new Error("测评失败，请重试");
       }
       const data = (await res.json()) as AssessResponse;
       setResult(data);
+      setLastSubmittedAnswers(serializedAnswers);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   };
@@ -233,7 +257,7 @@ export default function Home() {
                   disabled={!canSubmit || !currentUser || questionsLoading}
                   block
                 >
-                  生成 MBTI 与对应卦象
+                  {isCurrentAnswerSubmitted ? "当前答案已提交" : "生成 MBTI 与对应卦象"}
                 </Button>
               </Space>
             </Card>

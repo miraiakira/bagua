@@ -1,5 +1,6 @@
 import { dbPool } from "@/lib/db";
 import type { Hexagram } from "@/lib/mbti-core";
+import { ensurePointSchemaReady } from "@/lib/points-store";
 
 export type AdminUserListItem = {
   id: string;
@@ -12,6 +13,7 @@ export type AdminUserListItem = {
   assessmentCount: number;
   lastAssessmentAt: string | null;
   latestType64: string | null;
+  pointBalance: number;
 };
 
 export type AdminResultListItem = {
@@ -50,6 +52,7 @@ export const listAdminUsers = async ({
   limit: number;
   offset: number;
 }) => {
+  await ensurePointSchemaReady();
   const hasKeyword = keyword.trim().length > 0;
   const params: Array<string | number> = [];
   let whereClause = "";
@@ -79,6 +82,7 @@ export const listAdminUsers = async ({
     assessmentCount: string;
     lastAssessmentAt: Date | null;
     latestType64: string | null;
+    pointBalance: number | null;
   }>(
     `SELECT
        u.id,
@@ -96,11 +100,13 @@ export const listAdminUsers = async ({
          WHERE ar2.user_id = u.id
          ORDER BY ar2.created_at DESC, ar2.id DESC
          LIMIT 1
-       ) AS "latestType64"
+       ) AS "latestType64",
+       COALESCE(pa.balance, 0) AS "pointBalance"
      FROM "user" u
      LEFT JOIN assessment_result ar ON ar.user_id = u.id
+     LEFT JOIN point_account pa ON pa.user_id = u.id
      ${whereClause}
-     GROUP BY u.id
+     GROUP BY u.id, pa.balance
      ORDER BY u."createdAt" DESC
      LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
     dataParams,
@@ -121,6 +127,7 @@ export const listAdminUsers = async ({
         ? new Date(row.lastAssessmentAt).toISOString()
         : null,
       latestType64: row.latestType64,
+      pointBalance: Number(row.pointBalance ?? 0),
     })),
   };
 };

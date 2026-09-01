@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
 CREATE TABLE IF NOT EXISTS assessment_result (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT,
+  submission_id TEXT,
   mbti TEXT NOT NULL,
   subtype TEXT NOT NULL,
   type64 TEXT NOT NULL,
@@ -32,6 +33,13 @@ CREATE TABLE IF NOT EXISTS assessment_result (
   hexagram JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE assessment_result
+  ADD COLUMN IF NOT EXISTS submission_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assessment_result_user_submission
+  ON assessment_result (user_id, submission_id)
+  WHERE user_id IS NOT NULL AND submission_id IS NOT NULL;
   `);
 };
 
@@ -90,15 +98,22 @@ export const listQuestions = async (): Promise<MbtiQuestion[]> => {
 
 export const saveAssessment = async (
   userId: string,
+  submissionId: string,
   answers: Record<string, string>,
   assessment: AssessResponse,
 ) => {
   await ensureReady();
-  await dbPool.query(
-    `INSERT INTO assessment_result (user_id, mbti, subtype, type64, answers, scores, advice, hexagram)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb)`,
+  const result = await dbPool.query<{ id: string }>(
+    `INSERT INTO assessment_result
+       (user_id, submission_id, mbti, subtype, type64, answers, scores, advice, hexagram)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb)
+     ON CONFLICT (user_id, submission_id)
+       WHERE user_id IS NOT NULL AND submission_id IS NOT NULL
+       DO UPDATE SET submission_id = EXCLUDED.submission_id
+     RETURNING id::text AS id`,
     [
       userId || null,
+      submissionId,
       assessment.mbti,
       assessment.subtype,
       assessment.type64,
@@ -108,6 +123,7 @@ export const saveAssessment = async (
       JSON.stringify(assessment.hexagram),
     ],
   );
+  return Number(result.rows[0]?.id ?? 0);
 };
 
 export const listAssessmentHistory = async (

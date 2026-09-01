@@ -14,6 +14,7 @@ type AdminUserListItem = {
   assessmentCount: number;
   lastAssessmentAt: string | null;
   latestType64: string | null;
+  pointBalance: number;
 };
 
 type UserListResponse = {
@@ -110,6 +111,11 @@ export default function AdminUsersPage() {
         key: "assessmentCount",
       },
       {
+        title: "瓜子",
+        dataIndex: "pointBalance",
+        key: "pointBalance",
+      },
+      {
         title: "最近类型",
         key: "latestType64",
         render: (_: unknown, record: AdminUserListItem) => record.latestType64 || "-",
@@ -132,6 +138,7 @@ export default function AdminUsersPage() {
     const verifiedCount = items.filter((item) => item.emailVerified).length;
     const assessedCount = items.filter((item) => item.assessmentCount > 0).length;
     const totalAssessments = items.reduce((sum, item) => sum + item.assessmentCount, 0);
+    const totalPoints = items.reduce((sum, item) => sum + item.pointBalance, 0);
 
     return [
       {
@@ -150,9 +157,9 @@ export default function AdminUsersPage() {
         description: "当前页至少有一次测评",
       },
       {
-        title: "测评合计",
-        value: String(totalAssessments),
-        description: "当前页用户累计测评次数",
+        title: "瓜子合计",
+        value: String(totalPoints),
+        description: `当前页测评合计 ${totalAssessments} 次`,
       },
     ];
   }, [items, total]);
