@@ -19,6 +19,6 @@ export async function GET() {
     return NextResponse.json(summary);
   } catch (error) {
     console.error("failed to load points", error);
-    return NextResponse.json({ message: "无法加载瓜子" }, { status: 500 });
+    return NextResponse.json({ message: "无法加载卦子" }, { status: 500 });
   }
 }

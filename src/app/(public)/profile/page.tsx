@@ -653,11 +653,11 @@ export default function ProfilePage() {
         const response = await fetch("/api/points", { cache: "no-store" });
         const data = (await response.json()) as PointSummary & { message?: string };
         if (!response.ok) {
-          throw new Error(data.message || "加载瓜子失败");
+          throw new Error(data.message || "加载卦子失败");
         }
         setPoints(data);
       } catch (error) {
-        setPointsError(error instanceof Error ? error.message : "加载瓜子失败");
+        setPointsError(error instanceof Error ? error.message : "加载卦子失败");
       } finally {
         if (!silent) {
           setPointsLoading(false);
@@ -692,7 +692,7 @@ export default function ProfilePage() {
         await fetchPoints(true);
       }
       if (data.awarded) {
-        messageApi.success(`签到成功，获得 ${data.points || 0} 瓜子`);
+        messageApi.success(`签到成功，获得 ${data.points || 0} 卦子`);
       } else {
         messageApi.info("今天已经签到过了");
       }
@@ -888,7 +888,7 @@ export default function ProfilePage() {
         </Card>
 
         <Card
-          title="我的瓜子"
+          title="我的卦子"
           extra={(
             <Button size="small" onClick={() => void fetchPoints(false)} loading={pointsLoading}>
               刷新
@@ -906,7 +906,7 @@ export default function ProfilePage() {
               <Row gutter={[12, 12]} align="middle">
                 <Col xs={24} md={8}>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <Typography.Text type="secondary">当前瓜子</Typography.Text>
+                    <Typography.Text type="secondary">当前卦子</Typography.Text>
                     <Typography.Title level={2} className="!mb-0 !mt-1">
                       {points?.balance ?? 0}
                     </Typography.Title>
@@ -918,8 +918,8 @@ export default function ProfilePage() {
                       <Tag color={points?.todayCheckedIn ? "success" : "gold"}>
                         {points?.todayCheckedIn ? "今日已签到" : "今日未签到"}
                       </Tag>
-                      <Tag color="blue">签到 +{points?.dailyCheckinPoints ?? 5} 瓜子</Tag>
-                      <Tag color="purple">测评 +10 瓜子</Tag>
+                      <Tag color="blue">签到 +{points?.dailyCheckinPoints ?? 5} 卦子</Tag>
+                      <Tag color="purple">测评 +10 卦子</Tag>
                     </Space>
                     <Button
                       type="primary"
@@ -927,7 +927,7 @@ export default function ProfilePage() {
                       loading={checkinLoading}
                       disabled={Boolean(points?.todayCheckedIn)}
                     >
-                      {points?.todayCheckedIn ? "今日已领取" : "签到领瓜子"}
+                      {points?.todayCheckedIn ? "今日已领取" : "签到领卦子"}
                     </Button>
                   </Space>
                 </Col>
@@ -936,7 +936,7 @@ export default function ProfilePage() {
               <Divider className="!my-0" />
 
               <Space orientation="vertical" size={8} className="w-full">
-                <Typography.Text strong>瓜子明细</Typography.Text>
+                <Typography.Text strong>卦子明细</Typography.Text>
                 {points?.recent?.length ? (
                   <Space orientation="vertical" size={8} className="w-full">
                     {points.recent.slice(0, 8).map((item) => (
@@ -958,7 +958,7 @@ export default function ProfilePage() {
                     ))}
                   </Space>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无瓜子记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无卦子记录" />
                 )}
               </Space>
             </Space>

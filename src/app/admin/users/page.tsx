@@ -111,7 +111,7 @@ export default function AdminUsersPage() {
         key: "assessmentCount",
       },
       {
-        title: "瓜子",
+        title: "卦子",
         dataIndex: "pointBalance",
         key: "pointBalance",
       },
@@ -157,7 +157,7 @@ export default function AdminUsersPage() {
         description: "当前页至少有一次测评",
       },
       {
-        title: "瓜子合计",
+        title: "卦子合计",
         value: String(totalPoints),
         description: `当前页测评合计 ${totalAssessments} 次`,
       },

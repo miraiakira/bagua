@@ -93,11 +93,11 @@ export default function Home() {
       const response = await fetch("/api/points", { cache: "no-store" });
       const data = (await response.json()) as PointSummary & { message?: string };
       if (!response.ok) {
-        throw new Error(data.message || "加载瓜子失败");
+        throw new Error(data.message || "加载卦子失败");
       }
       setPoints(data);
     } catch (fetchError) {
-      setPointsError(fetchError instanceof Error ? fetchError.message : "加载瓜子失败");
+      setPointsError(fetchError instanceof Error ? fetchError.message : "加载卦子失败");
     } finally {
       if (!silent) {
         setPointsLoading(false);
@@ -128,7 +128,7 @@ export default function Home() {
         await fetchPoints(true);
       }
       if (data.awarded) {
-        messageApi.success(`签到成功，获得 ${data.points || 0} 瓜子`);
+        messageApi.success(`签到成功，获得 ${data.points || 0} 卦子`);
       } else {
         messageApi.info("今天已经签到过了");
       }
@@ -298,7 +298,7 @@ export default function Home() {
                     <Space orientation="vertical" size={12} className="w-full">
                       <div className="flex items-start justify-between gap-3">
                         <Statistic
-                          title="我的瓜子"
+                          title="我的卦子"
                           value={points?.balance ?? 0}
                           loading={pointsLoading && !points}
                         />
@@ -315,7 +315,7 @@ export default function Home() {
                       >
                         {points?.todayCheckedIn
                           ? "今日已领取"
-                          : `签到 +${points?.dailyCheckinPoints ?? 5} 瓜子`}
+                          : `签到 +${points?.dailyCheckinPoints ?? 5} 卦子`}
                       </Button>
                     </Space>
                     {pointsError && (
